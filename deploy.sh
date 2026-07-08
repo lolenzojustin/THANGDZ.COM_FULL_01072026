@@ -41,6 +41,12 @@ PROJECT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 echo -e "${GREEN}Thư mục dự án:${NC} $PROJECT_DIR"
 echo -e "${GREEN}Chạy các dịch vụ Node/PM2 dưới user:${NC} $REAL_USER"
 
+# Phân quyền sở hữu toàn bộ thư mục dự án cho REAL_USER để tránh lỗi ghi file/tạo thư mục (ví dụ npm install)
+if [ "$REAL_USER" != "root" ]; then
+  echo -e "Đang phân quyền sở hữu thư mục dự án cho user ${GREEN}$REAL_USER${NC}..."
+  chown -R $REAL_USER:$REAL_USER "$PROJECT_DIR"
+fi
+
 # 2. Cấu hình tên miền và email cấu hình SSL (Đã được định nghĩa ở đầu file)
 echo -e "\n${YELLOW}--- THÔNG TIN TÊN MIỀN & SSL ---${NC}"
 echo -e "Tên miền cấu hình hiện tại: ${GREEN}$DOMAIN${NC}"
@@ -192,11 +198,24 @@ fi
 
 # 8. Cấu hình và Chạy Backend (FastAPI)
 echo -e "\n${YELLOW}--- CẤU HÌNH & KHỞI CHẠY BACKEND (FASTAPI) ---${NC}"
-cd "$PROJECT_DIR/website_thangdz/backend"
+cd "$PROJECT_DIR/backend"
 
 # Viết file .env cho Backend
-echo -e "Đang ghi cấu hình .env cho backend..."
-cat <<EOF > .env
+if [ -f ".env" ]; then
+  echo -e "${YELLOW}Phát hiện file .env của backend đã tồn tại.${NC}"
+  read -p "Bạn có muốn ghi đè cấu hình file .env này không? (y/N): " OVERWRITE_ENV
+  if [ "$OVERWRITE_ENV" = "y" ] || [ "$OVERWRITE_ENV" = "Y" ]; then
+    WRITE_ENV=true
+  else
+    WRITE_ENV=false
+  fi
+else
+  WRITE_ENV=true
+fi
+
+if [ "$WRITE_ENV" = "true" ]; then
+  echo -e "Đang ghi cấu hình .env mới cho backend..."
+  cat <<EOF > .env
 DATABASE_URL=postgresql://postgresql:Thang123456@localhost:5432/thangdz_web
 SECRET_KEY=b9000a6e744d2d48bf5b27376c9a997092928502db1bc6c1ec0c1285bf8a48b8
 ACCESS_TOKEN_EXPIRE_MINUTES=60
@@ -204,7 +223,10 @@ REFRESH_TOKEN_EXPIRE_DAYS=7
 ENV=production
 CORS_ORIGINS=https://$DOMAIN,https://www.$DOMAIN
 EOF
-chown $REAL_USER:$REAL_USER .env
+  chown $REAL_USER:$REAL_USER .env
+else
+  echo -e "${GREEN}Giữ nguyên cấu hình .env hiện tại của backend.${NC}"
+fi
 
 # Thiết lập venv và cài đặt thư viện python
 if [ -d "venv" ]; then
@@ -216,28 +238,27 @@ python3 -m venv venv
 ./venv/bin/pip install -r requirements.txt
 chown -R $REAL_USER:$REAL_USER venv
 
-# Tạo Systemd Service cho FastAPI Backend
-echo -e "Tạo Systemd service cho Backend..."
-cat <<EOF > /etc/systemd/system/thangdz-backend.service
-[Unit]
-Description=ThangDZ Backend FastAPI Service
-After=network.target postgresql.service
+# Dừng và gỡ bỏ Systemd service cũ của backend (nếu có) để tránh xung đột cổng
+if [ -f "/etc/systemd/system/thangdz-backend.service" ]; then
+  echo -e "Đang dừng và xóa Systemd service cũ của backend..."
+  systemctl stop thangdz-backend 2>/dev/null || true
+  systemctl disable thangdz-backend 2>/dev/null || true
+  rm -f /etc/systemd/system/thangdz-backend.service
+  systemctl daemon-reload
+fi
 
-[Service]
-User=root
-WorkingDirectory=$PROJECT_DIR/website_thangdz/backend
-ExecStart=$PROJECT_DIR/website_thangdz/backend/venv/bin/uvicorn app.main:app --host 127.0.0.1 --port 8000 --root-path /api
-Restart=always
-Environment="PATH=$PROJECT_DIR/website_thangdz/backend/venv/bin"
+# Khởi chạy Backend bằng PM2
+echo -e "Khởi chạy Backend bằng PM2..."
+# Giải phóng cổng 8000 nếu có tiến trình chạy ngầm cũ
+if command -v fuser >/dev/null 2>&1; then
+  fuser -k 8000/tcp 2>/dev/null || true
+elif command -v lsof >/dev/null 2>&1; then
+  kill -9 $(lsof -t -i:8000) 2>/dev/null || true
+fi
 
-[Install]
-WantedBy=multi-user.target
-EOF
-
-systemctl daemon-reload
-systemctl start thangdz-backend
-systemctl enable thangdz-backend
-echo -e "${GREEN}Dịch vụ backend đã khởi chạy thành công trên cổng 8000!${NC}"
+sudo -u $REAL_USER pm2 delete "thangdz-backend" 2>/dev/null || true
+sudo -u $REAL_USER pm2 start "$PROJECT_DIR/backend/venv/bin/uvicorn" --name "thangdz-backend" --interpreter none --cwd "$PROJECT_DIR/backend" -- app.main:app --host 127.0.0.1 --port 8000 --root-path /api
+echo -e "${GREEN}Dịch vụ backend đã khởi chạy thành công trên cổng 8000 bằng PM2!${NC}"
 
 # 9. Cấu hình và Khởi chạy Website chính (Next.js Frontend)
 echo -e "\n${YELLOW}--- KHỞI CHẠY WEBSITE CHÍNH (FRONTEND) ---${NC}"
@@ -333,8 +354,12 @@ server {
     }
 
     # 3. Backend API (FastAPI root_path: /api)
-    location /api {
-        proxy_pass http://127.0.0.1:8000;
+    location = /api {
+        return 307 /api/;
+    }
+
+    location /api/ {
+        proxy_pass http://127.0.0.1:8000/;
         proxy_http_version 1.1;
         proxy_set_header Upgrade \$http_upgrade;
         proxy_set_header Connection 'upgrade';
@@ -343,6 +368,7 @@ server {
         proxy_set_header X-Real-IP \$remote_addr;
         proxy_set_header X-Forwarded-For \$proxy_add_x_forwarded_for;
         proxy_set_header X-Forwarded-Proto \$scheme;
+        proxy_set_header X-Forwarded-Prefix /api;
         client_max_body_size 50M;
     }
 }
@@ -394,9 +420,8 @@ echo -e " 2. Trang quản trị Admin:  ${GREEN}https://$DOMAIN/admin${NC}"
 echo -e " 3. Tài liệu API Backend:  ${GREEN}https://$DOMAIN/api/docs${NC}"
 echo -e " 4. Trạng thái các dịch vụ:${YELLOW}"
 sudo -u $REAL_USER pm2 status
-systemctl status thangdz-backend --no-pager -l
 echo -e "${NC}======================================================================"
 echo -e "${YELLOW}Gợi ý:${NC} Để kiểm tra logs hệ thống, bạn có thể dùng các lệnh:"
-echo -e " - Logs Frontend/Admin: ${BLUE}pm2 logs${NC}"
-echo -e " - Logs Backend:        ${BLUE}journalctl -u thangdz-backend -f${NC}"
+echo -e " - Logs Frontend/Admin/Backend: ${BLUE}pm2 logs${NC}"
+echo -e " - Logs Backend riêng:         ${BLUE}pm2 logs thangdz-backend${NC}"
 echo -e "======================================================================"

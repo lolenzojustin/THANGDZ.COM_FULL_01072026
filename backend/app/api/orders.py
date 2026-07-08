@@ -1,7 +1,7 @@
 # backend/app/api/orders.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 import random
 
 from app.core.database import get_db
@@ -12,7 +12,7 @@ from app.api.deps import get_current_user, check_admin
 router = APIRouter(prefix="/orders", tags=["Orders"])
 
 def generate_order_code() -> str:
-    now_str = datetime.now(UTC).strftime("%Y%m%d")
+    now_str = datetime.now(timezone.utc).strftime("%Y%m%d")
     rand_val = random.randint(1000, 9999)
     return f"ORD-{now_str}-{rand_val}"
 

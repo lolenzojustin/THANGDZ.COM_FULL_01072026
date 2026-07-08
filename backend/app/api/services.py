@@ -1,7 +1,7 @@
 # backend/app/api/services.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core.database import get_db
@@ -50,7 +50,7 @@ def create_service(
     
     dup_service = db.query(Service).filter(Service.slug == slug).first()
     if dup_service:
-        slug = f"{slug}-{int(datetime.now(UTC).timestamp())}"
+        slug = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}"
         
     new_service = Service(
         name=service_in.name,
@@ -90,7 +90,7 @@ def update_service(
         new_slug = slugify(service_in.name)
         dup_service = db.query(Service).filter(Service.slug == new_slug, Service.id != service_id).first()
         if dup_service:
-            new_slug = f"{new_slug}-{int(datetime.now(UTC).timestamp())}"
+            new_slug = f"{new_slug}-{int(datetime.now(timezone.utc).timestamp())}"
         service.slug = new_slug
         
     db.commit()

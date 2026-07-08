@@ -1,7 +1,7 @@
 # backend/app/api/payments.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import Optional
 
 from app.core.database import get_db
@@ -120,7 +120,7 @@ def admin_confirm_payment(
         )
         
     payment.status = "success" if confirm_in.status == "success" else "failed"
-    payment.paid_at = datetime.now(UTC) if confirm_in.status == "success" else None
+    payment.paid_at = datetime.now(timezone.utc) if confirm_in.status == "success" else None
     payment.provider_transaction_id = confirm_in.provider_transaction_id
     
     # Cap nhat trang thai don hang tuong ung

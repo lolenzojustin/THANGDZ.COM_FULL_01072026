@@ -1,11 +1,11 @@
 # backend/app/models/models.py
 from sqlalchemy import Column, Integer, String, Text, Float, DateTime, ForeignKey, Boolean
 from sqlalchemy.orm import relationship
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from app.core.database import Base
 
 def utcnow():
-    return datetime.now(UTC)
+    return datetime.now(timezone.utc)
 
 class User(Base):
     __tablename__ = "users"

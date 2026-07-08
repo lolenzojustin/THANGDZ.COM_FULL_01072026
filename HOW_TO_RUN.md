@@ -11,7 +11,7 @@ Dự án bao gồm 3 phần chính chạy độc lập trực tiếp trên môi 
 
 1. Mở Terminal mới từ thư mục gốc của dự án (`THANGDZ.COM_FULL_01072026`) và di chuyển đến thư mục backend:
    ```powershell
-   cd website_thangdz\backend
+   cd backend
    ```
 
 2. Tạo môi trường ảo Python (Venv):

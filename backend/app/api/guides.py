@@ -1,7 +1,7 @@
 # backend/app/api/guides.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core.database import get_db
@@ -59,9 +59,9 @@ def create_guide(
     
     dup_guide = db.query(Guide).filter(Guide.slug == slug).first()
     if dup_guide:
-        slug = f"{slug}-{int(datetime.now(UTC).timestamp())}"
+        slug = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}"
         
-    published_at = datetime.now(UTC) if guide_in.status == "published" else None
+    published_at = datetime.now(timezone.utc) if guide_in.status == "published" else None
     
     new_guide = Guide(
         title=guide_in.title,
@@ -97,14 +97,14 @@ def update_guide(
         
     for field, value in guide_in.model_dump(exclude_unset=True).items():
         if field == "status" and value == "published" and guide.status != "published":
-            guide.published_at = datetime.now(UTC)
+            guide.published_at = datetime.now(timezone.utc)
         setattr(guide, field, value)
         
     if guide_in.title is not None:
         new_slug = slugify(guide_in.title)
         dup_guide = db.query(Guide).filter(Guide.slug == new_slug, Guide.id != guide_id).first()
         if dup_guide:
-            new_slug = f"{new_slug}-{int(datetime.now(UTC).timestamp())}"
+            new_slug = f"{new_slug}-{int(datetime.now(timezone.utc).timestamp())}"
         guide.slug = new_slug
         
     db.commit()
@@ -142,7 +142,7 @@ def publish_guide(
             detail="Khong tim thay huong dan."
         )
     guide.status = "published"
-    guide.published_at = datetime.now(UTC)
+    guide.published_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(guide)
     return guide

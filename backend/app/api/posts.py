@@ -1,7 +1,7 @@
 # backend/app/api/posts.py
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy.orm import Session
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from typing import List, Optional
 
 from app.core.database import get_db
@@ -55,9 +55,9 @@ def create_post(
     dup_post = db.query(Post).filter(Post.slug == slug).first()
     if dup_post:
         # Them timestamp vao slug de tranh trung
-        slug = f"{slug}-{int(datetime.now(UTC).timestamp())}"
+        slug = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}"
         
-    published_at = datetime.now(UTC) if post_in.status == "published" else None
+    published_at = datetime.now(timezone.utc) if post_in.status == "published" else None
     
     new_post = Post(
         title=post_in.title,
@@ -92,7 +92,7 @@ def update_post(
         
     for field, value in post_in.model_dump(exclude_unset=True).items():
         if field == "status" and value == "published" and post.status != "published":
-            post.published_at = datetime.now(UTC)
+            post.published_at = datetime.now(timezone.utc)
         setattr(post, field, value)
         
     # Cap nhat slug neu title thay doi
@@ -100,7 +100,7 @@ def update_post(
         new_slug = slugify(post_in.title)
         dup_post = db.query(Post).filter(Post.slug == new_slug, Post.id != post_id).first()
         if dup_post:
-            new_slug = f"{new_slug}-{int(datetime.now(UTC).timestamp())}"
+            new_slug = f"{new_slug}-{int(datetime.now(timezone.utc).timestamp())}"
         post.slug = new_slug
         
     db.commit()
@@ -138,7 +138,7 @@ def publish_post(
             detail="Khong tim thay bai viet."
         )
     post.status = "published"
-    post.published_at = datetime.now(UTC)
+    post.published_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(post)
     return post

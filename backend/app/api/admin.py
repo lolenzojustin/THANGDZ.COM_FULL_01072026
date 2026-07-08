@@ -4,7 +4,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import func
 from pydantic import BaseModel
 from typing import Optional, List, Any
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from pathlib import Path
 import shutil
 import uuid
@@ -169,9 +169,9 @@ def get_revenue_chart(
     db: Session = Depends(get_db),
     current_user: User = Depends(check_admin)
 ):
-    from datetime import datetime, UTC, timedelta
+    from datetime import datetime, timezone, timedelta
 
-    start_date = datetime.now(UTC) - timedelta(days=days)
+    start_date = datetime.now(timezone.utc) - timedelta(days=days)
 
     results = (
         db.query(
@@ -355,9 +355,9 @@ def create_post(post_in: PostCreate, db: Session = Depends(get_db), current_user
     slug = slugify(post_in.title)
     dup = db.query(Post).filter(Post.slug == slug).first()
     if dup:
-        slug = f"{slug}-{int(datetime.now(UTC).timestamp())}"
+        slug = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}"
 
-    published_at = datetime.now(UTC) if post_in.status == "published" else None
+    published_at = datetime.now(timezone.utc) if post_in.status == "published" else None
     new_post = Post(
         title=post_in.title, slug=slug, summary=post_in.summary,
         content=post_in.content, thumbnail_url=post_in.thumbnail_url,
@@ -378,14 +378,14 @@ def update_post(post_id: int, post_in: PostUpdate, db: Session = Depends(get_db)
 
     for field, value in post_in.model_dump(exclude_unset=True).items():
         if field == "status" and value == "published" and post.status != "published":
-            post.published_at = datetime.now(UTC)
+            post.published_at = datetime.now(timezone.utc)
         setattr(post, field, value)
 
     if post_in.title is not None:
         new_slug = slugify(post_in.title)
         dup = db.query(Post).filter(Post.slug == new_slug, Post.id != post_id).first()
         if dup:
-            new_slug = f"{new_slug}-{int(datetime.now(UTC).timestamp())}"
+            new_slug = f"{new_slug}-{int(datetime.now(timezone.utc).timestamp())}"
         post.slug = new_slug
 
     db.commit()
@@ -409,7 +409,7 @@ def publish_post(post_id: int, db: Session = Depends(get_db), current_user: User
     if not post:
         raise HTTPException(status_code=404, detail="Khong tim thay bai viet.")
     post.status = "published"
-    post.published_at = datetime.now(UTC)
+    post.published_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(post)
     return post
@@ -466,9 +466,9 @@ def create_guide(guide_in: GuideCreate, db: Session = Depends(get_db), current_u
     slug = slugify(guide_in.title)
     dup = db.query(Guide).filter(Guide.slug == slug).first()
     if dup:
-        slug = f"{slug}-{int(datetime.now(UTC).timestamp())}"
+        slug = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}"
 
-    published_at = datetime.now(UTC) if guide_in.status == "published" else None
+    published_at = datetime.now(timezone.utc) if guide_in.status == "published" else None
     new_guide = Guide(
         title=guide_in.title, slug=slug, summary=guide_in.summary,
         content=guide_in.content, thumbnail_url=guide_in.thumbnail_url,
@@ -489,14 +489,14 @@ def update_guide(guide_id: int, guide_in: GuideUpdate, db: Session = Depends(get
 
     for field, value in guide_in.model_dump(exclude_unset=True).items():
         if field == "status" and value == "published" and guide.status != "published":
-            guide.published_at = datetime.now(UTC)
+            guide.published_at = datetime.now(timezone.utc)
         setattr(guide, field, value)
 
     if guide_in.title is not None:
         new_slug = slugify(guide_in.title)
         dup = db.query(Guide).filter(Guide.slug == new_slug, Guide.id != guide_id).first()
         if dup:
-            new_slug = f"{new_slug}-{int(datetime.now(UTC).timestamp())}"
+            new_slug = f"{new_slug}-{int(datetime.now(timezone.utc).timestamp())}"
         guide.slug = new_slug
 
     db.commit()
@@ -520,7 +520,7 @@ def publish_guide(guide_id: int, db: Session = Depends(get_db), current_user: Us
     if not guide:
         raise HTTPException(status_code=404, detail="Khong tim thay huong dan.")
     guide.status = "published"
-    guide.published_at = datetime.now(UTC)
+    guide.published_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(guide)
     return guide
@@ -574,7 +574,7 @@ def create_service(service_in: ServiceCreate, db: Session = Depends(get_db), cur
     slug = slugify(service_in.name)
     dup = db.query(Service).filter(Service.slug == slug).first()
     if dup:
-        slug = f"{slug}-{int(datetime.now(UTC).timestamp())}"
+        slug = f"{slug}-{int(datetime.now(timezone.utc).timestamp())}"
 
     new_service = Service(
         name=service_in.name, slug=slug,
@@ -603,7 +603,7 @@ def update_service(service_id: int, service_in: ServiceUpdate, db: Session = Dep
         new_slug = slugify(service_in.name)
         dup = db.query(Service).filter(Service.slug == new_slug, Service.id != service_id).first()
         if dup:
-            new_slug = f"{new_slug}-{int(datetime.now(UTC).timestamp())}"
+            new_slug = f"{new_slug}-{int(datetime.now(timezone.utc).timestamp())}"
         service.slug = new_slug
 
     db.commit()
@@ -808,7 +808,7 @@ def confirm_payment(
     tx_id = body.get("provider_transaction_id")
 
     payment.status = "success" if confirm_status == "success" else "failed"
-    payment.paid_at = datetime.now(UTC) if confirm_status == "success" else None
+    payment.paid_at = datetime.now(timezone.utc) if confirm_status == "success" else None
     payment.provider_transaction_id = tx_id
 
     order = db.query(Order).filter(Order.id == payment.order_id).first()
